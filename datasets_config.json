@@ -1,0 +1,9 @@
+{
+  "datasets": [
+    {
+      "name": "court_orders_bilingual",
+      "description": "Sample bilingual court-order metadata dataset.",
+      "datafile": "bilingual.xlsx"
+    }
+  ]
+}
