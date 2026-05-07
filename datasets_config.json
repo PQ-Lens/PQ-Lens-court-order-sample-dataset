@@ -2,8 +2,14 @@
   "datasets": [
     {
       "name": "court_orders_bilingual",
-      "description": "Sample bilingual court-order metadata dataset.",
-      "datafile": "bilingual.xlsx"
+      "summary": "A bilingual legal-text dataset derived from Court Notices published on the Government of Malta website. It contains parallel Maltese–English text pairs extracted from court notice PDFs and converted into structured text format.",
+      "description": "This dataset contains Court Notices from the Government of Malta website (gov.mt). It contains Maltese–English pairs for each court notice. The original dataset format was PDF text; these extracts have been converted into structured text pairs in both Maltese and English. The dataset contains 2,310 rows of data. The latest record date is 7 May 2026, and the earliest record date is 22 November 2022. The dataset is suitable for Maltese–English and English–Maltese machine translation tasks, legal NLP research tasks, and bilingual legal language analysis.",
+      "datafile": "bilingual.xlsx",
+      "language_mode": "bilingual_aligned",
+      "synthetic_status": "non_synthetic",
+      "source_language": "eng_Latn",
+      "target_language": "mlt_Latn",
+      "language_pair": "eng_Latn-mlt_Latn"
     }
   ]
 }

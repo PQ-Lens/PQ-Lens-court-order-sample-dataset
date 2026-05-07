@@ -340,6 +340,30 @@ Behavior:
 
 ---
 
+## Importing bilingual.xlsx through the API
+
+Use `scripts/import_bilingual_xlsx.py` to insert every Maltese-English pair from `bilingual.xlsx` into the API and then verify that all expected records are present. The API must be running before you execute the importer.
+
+```bash
+python scripts/import_bilingual_xlsx.py \
+  --base-url http://localhost:5000 \
+  --xlsx bilingual.xlsx
+```
+
+The importer creates or updates the `court_orders_bilingual` dataset using this metadata:
+
+- **Summary**: A bilingual legal-text dataset derived from Court Notices published on the Government of Malta website. It contains parallel Maltese–English text pairs extracted from court notice PDFs and converted into structured text format.
+- **Description**: This dataset contains Court Notices from the Government of Malta website (gov.mt). It contains Maltese–English pairs for each court notice. The original dataset format was PDF text; these extracts have been converted into structured text pairs in both Maltese and English. The dataset contains 2,310 rows of data. The latest record date is 7 May 2026, and the earliest record date is 22 November 2022. The dataset is suitable for Maltese–English and English–Maltese machine translation tasks, legal NLP research tasks, and bilingual legal language analysis.
+- **Language mode**: `bilingual_aligned`
+- **Synthetic status**: `non_synthetic`
+- **Source language**: `eng_Latn`
+- **Target language**: `mlt_Latn`
+- **Language pair**: `eng_Latn-mlt_Latn`
+
+For each worksheet row, the importer stores the English text in the record `text` field and the Maltese text in `translation_metadata.target_text`. It treats duplicate dataset or record responses as already imported, making repeated runs safe. After insertion, it fetches all records from `/datasets/court_orders_bilingual/records` and verifies that every expected row exists with the required language, language-pair, provenance, translation, and row-number metadata.
+
+---
+
 ## Examples
 
 ### 1) Create dataset
