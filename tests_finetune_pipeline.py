@@ -13,6 +13,7 @@ if str(SRC) not in sys.path:
 from finetune.config import load_experiment_config
 from finetune.data.loaders import normalize_rows
 from finetune.data.preprocess import PreprocessError, prepare_splits
+from finetune.export import write_ollama_modelfile
 from finetune.train import run_pipeline
 
 
@@ -114,6 +115,58 @@ class FineTunePipelineTestCase(unittest.TestCase):
             self.assertEqual(metrics["method"], "qlora")
             self.assertEqual(metrics["trainable_parameter_policy"], "adapter_only")
             self.assertGreater(metrics["split_summary"]["train"]["examples"], 0)
+
+    def test_gemma_smoke_config_uses_bounded_qlora_and_messages(self) -> None:
+        config = load_experiment_config("configs/experiments/gemma3_1b_qlora_smoke.json")
+
+        self.assertEqual(config["model"]["id"], "google/gemma-3-1b-it")
+        self.assertEqual(config["method"]["name"], "qlora")
+        self.assertEqual(config["method"]["lora"]["r"], 8)
+        self.assertEqual(config["training"]["max_steps"], 10)
+        self.assertEqual(config["dataset"]["columns"]["messages"], "messages")
+
+    def test_message_rows_survive_preprocessing_for_chat_template_training(self) -> None:
+        rows = [
+            {
+                "id": "chat-1",
+                "messages": [
+                    {"role": "user", "content": "Translate: Avviz"},
+                    {"role": "assistant", "content": "Notice"},
+                ],
+                "metadata": {"document_id": "doc-chat-1"},
+            },
+            {
+                "id": "chat-2",
+                "messages": [
+                    {"role": "user", "content": "Translate: Qorti"},
+                    {"role": "assistant", "content": "Court"},
+                ],
+                "metadata": {"document_id": "doc-chat-2"},
+            },
+        ]
+        examples = normalize_rows(
+            rows,
+            {"columns": {"id": "id", "messages": "messages", "group_id": "metadata.document_id"}},
+        )
+        splits = prepare_splits(examples, {"split": {"ratios": {"train": 0.5, "test": 0.5}}})
+
+        all_examples = [row for split_rows in splits.values() for row in split_rows]
+        self.assertTrue(all_examples)
+        self.assertTrue(all_examples[0].messages)
+        self.assertIn("user", {message["role"] for message in all_examples[0].messages})
+
+    def test_ollama_modelfile_points_to_merged_model_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir) / "merged"
+            model_dir.mkdir()
+            modelfile = Path(temp_dir) / "Modelfile"
+
+            write_ollama_modelfile(model_dir, modelfile, temperature=0.1, num_ctx=1024)
+
+            text = modelfile.read_text(encoding="utf-8")
+            self.assertIn(f"FROM {model_dir.resolve()}", text)
+            self.assertIn("PARAMETER temperature 0.1", text)
+            self.assertIn("PARAMETER num_ctx 1024", text)
 
 
 if __name__ == "__main__":

@@ -31,7 +31,11 @@ def load_model_and_tokenizer(model_config: dict[str, Any], method_config: dict[s
 
     dtype_name = model_config.get("dtype", "bf16")
     dtype = torch.bfloat16 if dtype_name == "bf16" and torch.cuda.is_available() else torch.float16
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=bool(model_config.get("trust_remote_code", False)))
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_id,
+        token=model_config.get("token"),
+        trust_remote_code=bool(model_config.get("trust_remote_code", False)),
+    )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -44,13 +48,17 @@ def load_model_and_tokenizer(model_config: dict[str, Any], method_config: dict[s
             bnb_4bit_use_double_quant=bool(method_config.get("quantization", {}).get("double_quant", True)),
         )
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        torch_dtype=dtype if quantization_config is None else None,
-        device_map=model_config.get("device_map", "auto"),
-        quantization_config=quantization_config,
-        trust_remote_code=bool(model_config.get("trust_remote_code", False)),
-    )
+    load_kwargs = {
+        "torch_dtype": dtype if quantization_config is None else None,
+        "device_map": model_config.get("device_map", "auto"),
+        "quantization_config": quantization_config,
+        "token": model_config.get("token"),
+        "trust_remote_code": bool(model_config.get("trust_remote_code", False)),
+    }
+    if model_config.get("attn_implementation"):
+        load_kwargs["attn_implementation"] = model_config["attn_implementation"]
+
+    model = AutoModelForCausalLM.from_pretrained(model_id, **load_kwargs)
     if hasattr(model.config, "use_cache"):
         model.config.use_cache = False
     return model, tokenizer

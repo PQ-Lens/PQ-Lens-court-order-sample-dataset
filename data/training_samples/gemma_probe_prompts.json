@@ -1,0 +1,11 @@
+[
+  {
+    "id": "legal_translation_mlt_to_eng",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Translate this Maltese legal notice to English: Il-Qorti ordnat li l-avviz jigi ppubblikat fir-Registru Pubbliku."
+      }
+    ]
+  }
+]

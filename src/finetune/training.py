@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import time
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,24 @@ def _summarize_splits(splits: dict[str, list[TrainingExample]]) -> dict[str, Any
             "groups": len({row.group_id for row in rows}),
         }
     return summary
+
+
+def _sft_record(example: TrainingExample) -> dict[str, Any]:
+    if example.messages:
+        return {"messages": example.messages}
+    return {"text": example.training_text()}
+
+
+def _trainable_parameter_summary(model: Any) -> dict[str, Any]:
+    trainable = 0
+    total = 0
+    for parameter in model.parameters():
+        count = parameter.numel()
+        total += count
+        if parameter.requires_grad:
+            trainable += count
+    percent = round((trainable / total) * 100, 4) if total else 0.0
+    return {"trainable": trainable, "total": total, "percent": percent}
 
 
 def run_dry_training(
@@ -72,15 +91,57 @@ def _apply_peft(model: Any, method_config: dict[str, Any]) -> Any:
         model = prepare_model_for_kbit_training(model)
 
     lora = method_config.get("lora", {})
-    peft_config = LoraConfig(
-        r=int(lora.get("r", 16)),
-        lora_alpha=int(lora.get("alpha", 32)),
-        lora_dropout=float(lora.get("dropout", 0.05)),
-        target_modules=lora.get("target_modules", "all-linear"),
-        bias=lora.get("bias", "none"),
-        task_type="CAUSAL_LM",
-    )
+    lora_kwargs = {
+        "r": int(lora.get("r", 16)),
+        "lora_alpha": int(lora.get("alpha", 32)),
+        "lora_dropout": float(lora.get("dropout", 0.05)),
+        "bias": lora.get("bias", "none"),
+        "task_type": "CAUSAL_LM",
+    }
+    if lora.get("target_modules"):
+        lora_kwargs["target_modules"] = lora["target_modules"]
+    if lora.get("modules_to_save"):
+        lora_kwargs["modules_to_save"] = lora["modules_to_save"]
+    if "ensure_weight_tying" in inspect.signature(LoraConfig).parameters:
+        lora_kwargs["ensure_weight_tying"] = bool(lora.get("ensure_weight_tying", False))
+    peft_config = LoraConfig(**lora_kwargs)
     return get_peft_model(model, peft_config)
+
+
+def _training_arguments_kwargs(training: dict[str, Any], output_dir: Path, has_eval: bool) -> dict[str, Any]:
+    try:
+        from transformers import TrainingArguments
+    except ImportError as exc:  # pragma: no cover - checked by caller
+        raise TrainingError("Real training requires transformers.") from exc
+
+    params = inspect.signature(TrainingArguments).parameters
+    kwargs: dict[str, Any] = {
+        "output_dir": str(output_dir),
+        "per_device_train_batch_size": int(training.get("per_device_train_batch_size", 1)),
+        "per_device_eval_batch_size": int(training.get("per_device_eval_batch_size", 1)),
+        "gradient_accumulation_steps": int(training.get("gradient_accumulation_steps", 1)),
+        "learning_rate": float(training.get("learning_rate", 2e-4)),
+        "num_train_epochs": float(training.get("num_train_epochs", 1)),
+        "warmup_ratio": float(training.get("warmup_ratio", 0.03)),
+        "weight_decay": float(training.get("weight_decay", 0.0)),
+        "max_grad_norm": float(training.get("max_grad_norm", 1.0)),
+        "logging_steps": int(training.get("logging_steps", 10)),
+        "save_strategy": training.get("save_strategy", "epoch"),
+        "bf16": bool(training.get("bf16", False)),
+        "fp16": bool(training.get("fp16", False)),
+        "report_to": training.get("report_to", "none"),
+        "gradient_checkpointing": bool(training.get("gradient_checkpointing", True)),
+    }
+    if training.get("max_steps") is not None:
+        kwargs["max_steps"] = int(training["max_steps"])
+    eval_value = "steps" if has_eval and training.get("eval_steps") else ("epoch" if has_eval else "no")
+    if "eval_strategy" in params:
+        kwargs["eval_strategy"] = eval_value
+    else:
+        kwargs["evaluation_strategy"] = eval_value
+    if training.get("eval_steps") is not None:
+        kwargs["eval_steps"] = int(training["eval_steps"])
+    return kwargs
 
 
 def run_real_training(
@@ -98,42 +159,39 @@ def run_real_training(
         raise TrainingError("Real training requires datasets, transformers, and trl.") from exc
 
     model = _apply_peft(model, config["method"])
-    train_dataset = Dataset.from_list([{"text": row.training_text()} for row in splits["train"]])
+    train_uses_messages = any(row.messages for row in splits["train"])
+    train_dataset = Dataset.from_list([_sft_record(row) for row in splits["train"]])
     eval_rows = splits.get("validation") or splits.get("test") or []
-    eval_dataset = Dataset.from_list([{"text": row.training_text()} for row in eval_rows]) if eval_rows else None
+    eval_dataset = Dataset.from_list([_sft_record(row) for row in eval_rows]) if eval_rows else None
 
     training = config.get("training", {})
-    args = TrainingArguments(
-        output_dir=str(output_dir),
-        per_device_train_batch_size=int(training.get("per_device_train_batch_size", 1)),
-        per_device_eval_batch_size=int(training.get("per_device_eval_batch_size", 1)),
-        gradient_accumulation_steps=int(training.get("gradient_accumulation_steps", 1)),
-        learning_rate=float(training.get("learning_rate", 2e-4)),
-        num_train_epochs=float(training.get("num_train_epochs", 1)),
-        warmup_ratio=float(training.get("warmup_ratio", 0.03)),
-        weight_decay=float(training.get("weight_decay", 0.0)),
-        max_grad_norm=float(training.get("max_grad_norm", 1.0)),
-        logging_steps=int(training.get("logging_steps", 10)),
-        save_strategy=training.get("save_strategy", "epoch"),
-        evaluation_strategy="epoch" if eval_dataset else "no",
-        bf16=bool(training.get("bf16", False)),
-        fp16=bool(training.get("fp16", False)),
-        report_to=training.get("report_to", "none"),
-        gradient_checkpointing=bool(training.get("gradient_checkpointing", True)),
-    )
+    args = TrainingArguments(**_training_arguments_kwargs(training, output_dir, eval_dataset is not None))
 
-    trainer = SFTTrainer(
-        model=model,
-        tokenizer=tokenizer,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
-        dataset_text_field="text",
-        max_seq_length=int(config["model"].get("max_seq_length", 2048)),
-        args=args,
-    )
+    trainer_kwargs = {
+        "model": model,
+        "train_dataset": train_dataset,
+        "eval_dataset": eval_dataset,
+        "args": args,
+    }
+    trainer_params = inspect.signature(SFTTrainer).parameters
+    if "processing_class" in trainer_params:
+        trainer_kwargs["processing_class"] = tokenizer
+    else:
+        trainer_kwargs["tokenizer"] = tokenizer
+    if "dataset_text_field" in trainer_params and not train_uses_messages:
+        trainer_kwargs["dataset_text_field"] = "text"
+    if "max_seq_length" in trainer_params:
+        trainer_kwargs["max_seq_length"] = int(config["model"].get("max_seq_length", 2048))
+
+    trainer = SFTTrainer(**trainer_kwargs)
     trainer.train()
     trainer.save_model(str(output_dir))
-    metrics = {"dry_run": False, "train_result": trainer.state.log_history, "split_summary": _summarize_splits(splits)}
+    metrics = {
+        "dry_run": False,
+        "train_result": trainer.state.log_history,
+        "split_summary": _summarize_splits(splits),
+        "parameters": _trainable_parameter_summary(model),
+    }
     _write_json(output_dir / "metrics.json", metrics)
     _write_json(output_dir / "resolved_config.json", config)
     return metrics

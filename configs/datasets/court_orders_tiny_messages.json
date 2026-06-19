@@ -1,0 +1,24 @@
+{
+  "dataset": {
+    "id": "court_orders_tiny_messages",
+    "source": {
+      "type": "local",
+      "path": "data/training_samples/court_orders_tiny_messages.jsonl"
+    },
+    "columns": {
+      "id": "id",
+      "messages": "messages",
+      "group_id": "metadata.document_id"
+    },
+    "deduplicate": true,
+    "max_chars": 4000,
+    "split": {
+      "seed": 42,
+      "ratios": {
+        "train": 0.6,
+        "validation": 0.2,
+        "test": 0.2
+      }
+    }
+  }
+}
