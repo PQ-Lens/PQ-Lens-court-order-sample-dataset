@@ -123,6 +123,7 @@ class FineTunePipelineTestCase(unittest.TestCase):
         self.assertEqual(config["model"]["id"], "google/gemma-3-1b-it")
         self.assertEqual(config["method"]["name"], "qlora")
         self.assertEqual(config["method"]["lora"]["r"], 8)
+        self.assertNotIn("modules_to_save", config["method"]["lora"])
         self.assertEqual(config["training"]["max_steps"], 10)
         self.assertEqual(config["dataset"]["columns"]["messages"], "messages")
 
@@ -166,8 +167,11 @@ class FineTunePipelineTestCase(unittest.TestCase):
 
             text = modelfile.read_text(encoding="utf-8")
             self.assertIn(f"FROM {model_dir.resolve()}", text)
+            self.assertIn("<start_of_turn>user", text)
+            self.assertIn("<start_of_turn>model", text)
             self.assertIn("PARAMETER temperature 0.1", text)
             self.assertIn("PARAMETER num_ctx 1024", text)
+            self.assertIn('PARAMETER stop "<end_of_turn>"', text)
 
     def test_hf_access_check_reports_auth_failure_without_raising(self) -> None:
         original_import = __import__

@@ -45,8 +45,17 @@ def write_ollama_modelfile(
         "\n".join(
             [
                 f"FROM {model_path}",
+                'TEMPLATE """<bos>{{ if .System }}<start_of_turn>user',
+                "{{ .System }}",
+                "",
+                "{{ .Prompt }}<end_of_turn>",
+                "{{ else }}<start_of_turn>user",
+                "{{ .Prompt }}<end_of_turn>",
+                "{{ end }}<start_of_turn>model",
+                '"""',
                 f"PARAMETER temperature {temperature}",
                 f"PARAMETER num_ctx {num_ctx}",
+                'PARAMETER stop "<end_of_turn>"',
                 'SYSTEM """You are a legal translation assistant for Maltese and English court-order text."""',
                 "",
             ]
