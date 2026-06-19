@@ -1,0 +1,10 @@
+{
+  "experiment_id": "dry_run_qlora_court_orders",
+  "model_config": "dry_run_tiny.json",
+  "dataset_config": "court_orders_tiny.json",
+  "method_config": "qlora.json",
+  "output_root": "artifacts/finetune",
+  "evaluation": {
+    "metrics": ["dry_run_split_summary", "artifact_integrity"]
+  }
+}

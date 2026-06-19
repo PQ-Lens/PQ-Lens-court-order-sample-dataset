@@ -1,0 +1,10 @@
+{
+  "model": {
+    "id": "dry-run/tiny-causal-lm",
+    "architecture": "causal_lm",
+    "dtype": "bf16",
+    "device_map": "auto",
+    "max_seq_length": 512,
+    "trust_remote_code": false
+  }
+}
