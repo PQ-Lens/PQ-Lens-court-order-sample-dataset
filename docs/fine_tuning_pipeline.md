@@ -80,6 +80,46 @@ Expected artifacts:
 - `resolved_config.json`
 - `train_preview.json`
 
+## Gemma 3 1B Smoke Test
+
+Before running the real Gemma smoke workflow, verify that the Hugging Face account behind the cached token can download the gated checkpoint:
+
+```bash
+python3 scripts/check_hf_model_access.py \
+  --model google/gemma-3-1b-it \
+  --output artifacts/finetune/gemma3_1b_qlora_smoke/hf_access.json
+```
+
+Only continue if `"ok": true`. A gated-repo `403` means the account still needs access approval on the model page.
+
+Then run the baseline prompt probe, QLoRA smoke fine-tune, adapter probe, merge/export, and Ollama import:
+
+```bash
+python3 scripts/run_generation_probe.py \
+  --model google/gemma-3-1b-it \
+  --prompts data/training_samples/gemma_probe_prompts.json \
+  --output artifacts/finetune/gemma3_1b_qlora_smoke/baseline_generations.json
+
+python3 scripts/train_finetune.py \
+  --config configs/experiments/gemma3_1b_qlora_smoke.json \
+  --output-dir artifacts/finetune/gemma3_1b_qlora_smoke/adapter
+
+python3 scripts/run_generation_probe.py \
+  --model google/gemma-3-1b-it \
+  --adapter artifacts/finetune/gemma3_1b_qlora_smoke/adapter \
+  --prompts data/training_samples/gemma_probe_prompts.json \
+  --output artifacts/finetune/gemma3_1b_qlora_smoke/adapter_generations.json
+
+python3 scripts/merge_adapter_for_ollama.py \
+  --base-model google/gemma-3-1b-it \
+  --adapter artifacts/finetune/gemma3_1b_qlora_smoke/adapter \
+  --output-dir artifacts/finetune/gemma3_1b_qlora_smoke/merged \
+  --modelfile artifacts/finetune/gemma3_1b_qlora_smoke/Modelfile
+
+ollama create pqlens-gemma3-1b-legal-smoke:latest \
+  -f artifacts/finetune/gemma3_1b_qlora_smoke/Modelfile
+```
+
 ## Real Training
 
 Install the heavier ML stack only on machines that will run training:

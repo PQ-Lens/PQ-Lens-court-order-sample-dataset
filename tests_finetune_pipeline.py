@@ -14,6 +14,7 @@ from finetune.config import load_experiment_config
 from finetune.data.loaders import normalize_rows
 from finetune.data.preprocess import PreprocessError, prepare_splits
 from finetune.export import write_ollama_modelfile
+from finetune.hf_access import check_model_access
 from finetune.train import run_pipeline
 
 
@@ -167,6 +168,37 @@ class FineTunePipelineTestCase(unittest.TestCase):
             self.assertIn(f"FROM {model_dir.resolve()}", text)
             self.assertIn("PARAMETER temperature 0.1", text)
             self.assertIn("PARAMETER num_ctx 1024", text)
+
+    def test_hf_access_check_reports_auth_failure_without_raising(self) -> None:
+        original_import = __import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "huggingface_hub":
+                class FakeApi:
+                    def whoami(self):
+                        raise RuntimeError("missing token")
+
+                class FakeHub:
+                    HfApi = lambda self=None: FakeApi()
+
+                    @staticmethod
+                    def hf_hub_download(*_args, **_kwargs):
+                        raise AssertionError("should not download when auth fails")
+
+                return FakeHub
+            return original_import(name, *args, **kwargs)
+
+        import builtins
+
+        builtins.__import__ = fake_import
+        try:
+            result = check_model_access("google/gemma-3-1b-it")
+        finally:
+            builtins.__import__ = original_import
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["authenticated"])
+        self.assertEqual(result["error_type"], "RuntimeError")
 
 
 if __name__ == "__main__":
