@@ -1,0 +1,34 @@
+{
+  "dataset": {
+    "id": "court_orders_tiny",
+    "source": {
+      "type": "local",
+      "path": "data/training_samples/court_orders_tiny.jsonl"
+    },
+    "columns": {
+      "id": "id",
+      "text": "text",
+      "completion": "translation_metadata.target_text",
+      "source_lang": "translation_metadata.source_language",
+      "target_lang": "translation_metadata.target_language",
+      "group_id": "metadata.document_id"
+    },
+    "template": {
+      "task": "translation",
+      "force_prompt_completion": true,
+      "prompt": "Translate the following legal notice from {source_lang} to {target_lang}:\\n{text}",
+      "completion": "{completion}",
+      "text": "### Instruction:\\n{prompt}\\n\\n### Response:\\n{completion}"
+    },
+    "deduplicate": true,
+    "max_chars": 4000,
+    "split": {
+      "seed": 42,
+      "ratios": {
+        "train": 0.6,
+        "validation": 0.2,
+        "test": 0.2
+      }
+    }
+  }
+}

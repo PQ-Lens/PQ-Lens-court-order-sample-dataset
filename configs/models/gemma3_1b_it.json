@@ -1,0 +1,11 @@
+{
+  "model": {
+    "id": "google/gemma-3-1b-it",
+    "architecture": "causal_lm",
+    "dtype": "bf16",
+    "device_map": "auto",
+    "max_seq_length": 512,
+    "attn_implementation": "sdpa",
+    "trust_remote_code": false
+  }
+}

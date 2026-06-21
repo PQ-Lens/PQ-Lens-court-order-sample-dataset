@@ -1,0 +1,10 @@
+{
+  "experiment_id": "gemma3_1b_qlora_smoke",
+  "model_config": "gemma3_1b_it.json",
+  "dataset_config": "court_orders_tiny_messages.json",
+  "method_config": "qlora_smoke.json",
+  "output_root": "artifacts/finetune",
+  "evaluation": {
+    "metrics": ["loss", "generation_probe", "ollama_inference"]
+  }
+}

@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+artifacts/
+data_store.json
+*.tmp
+*.pdf
+uom_server_private_key
+uom_keys
